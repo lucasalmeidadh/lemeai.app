@@ -1,0 +1,18 @@
+{
+	"name": "Flutter (From Dockerfile)",
+	"build": {
+		"dockerfile": "Dockerfile"
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"dart-code.flutter",
+				"dart-code.dart-code"
+			]
+		}
+	},
+	"forwardPorts": [
+		3000
+	],
+	"remoteUser": "vscode"
+}

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "829373403786",
+    "project_id": "lemeai-chat-app",
+    "storage_bucket": "lemeai-chat-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:829373403786:android:beddd62ad29956b8c49373",
+        "android_client_info": {
+          "package_name": "com.example.lemeai_chat"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD2M_gWmRRAJDNOtE50OlcVUM57f2SVK6k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
