@@ -1,13 +1,29 @@
-// lib/main.dart - VERSÃO FINAL COM API CUSTOMIZADA
+// ARQUIVO: lib/main.dart
 
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'auth_wrapper.dart';
 import 'chat_detail_screen.dart';
 import 'firebase_options.dart';
-import 'auth_service.dart'; // Nosso novo serviço
-import 'login_screen.dart'; // Precisamos para o logout
+import 'auth_service.dart';
+import 'login_screen.dart';
+
+// Simulação dos dados que viriam da sua API/Firebase
+// para facilitar a construção do layout.
+final mockContacts = [
+  {
+    "id": "chat_1", "name": "Lucas Almeida", "initials": "LA",
+    "lastMessage": "Olá, como você está hoje?", "time": "5m", "unread": 1
+  },
+  {
+    "id": "chat_2", "name": "Camila Santana", "initials": "CS",
+    "lastMessage": "Olá, eu gostaria de um orçamento.", "time": "1h", "unread": 0
+  },
+  {
+    "id": "chat_3", "name": "Bruna Rosa", "initials": "BR",
+    "lastMessage": "Olá, tudo bem?", "time": "3h", "unread": 2
+  },
+];
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,14 +40,9 @@ class MyApp extends StatelessWidget {
       title: 'Leme Chat',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primarySwatch: Colors.indigo,
-        scaffoldBackgroundColor: Colors.white,
-        fontFamily: 'Roboto',
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
-          elevation: 0,
-        ),
+        primaryColor: const Color(0xFF005F73),
+        scaffoldBackgroundColor: const Color(0xFFF8F9FA),
+        fontFamily: 'Segoe UI',
       ),
       home: const AuthWrapper(),
     );
@@ -46,24 +57,9 @@ class ChatListScreen extends StatefulWidget {
 
 class _ChatListScreenState extends State<ChatListScreen> {
   final AuthService _authService = AuthService();
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  String? _currentUserId;
+  bool _isSellerOnline = true;
+  String _activeFilter = 'all'; // 'all' ou 'unread'
 
-  @override
-  void initState() {
-    super.initState();
-    _loadCurrentUser();
-  }
-
-  // Carrega o ID do usuário do token quando a tela inicia
-  void _loadCurrentUser() async {
-    final userId = await _authService.getUserIdFromToken();
-    setState(() {
-      _currentUserId = userId;
-    });
-  }
-  
-  // A lógica de logout agora usa nosso AuthService
   void _handleLogout() async {
     await _authService.logout();
     if (mounted) {
@@ -74,87 +70,210 @@ class _ChatListScreenState extends State<ChatListScreen> {
     }
   }
 
-  Future<void> _startNewChat() async {
-    // ... (Esta função precisa do _currentUserId, que agora carregamos no initState)
-  }
-
   @override
   Widget build(BuildContext context) {
+    // Filtra a lista de contatos com base no botão ativo
+    final filteredContacts = _activeFilter == 'unread'
+        ? mockContacts.where((c) => (c['unread'] as int) > 0).toList()
+        : mockContacts;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Conversas", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
-        centerTitle: false,
-        actions: [
-          IconButton(icon: const Icon(Icons.search), onPressed: () {}),
-          IconButton(onPressed: _handleLogout, icon: const Icon(Icons.logout_outlined)),
+        toolbarHeight: 0, // Remove a appbar padrão
+        backgroundColor: Colors.white,
+        elevation: 0,
+      ),
+      backgroundColor: Colors.white,
+      body: Column(
+        children: [
+          // 1. CABEÇALHO PERSONALIZADO
+          _buildHeader(),
+          // 2. ABAS DE FILTRO
+          _buildFilterTabs(),
+          const Divider(height: 1, color: Color(0xFFF0F2F5)),
+          // 3. LISTA DE CONTATOS
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              itemCount: filteredContacts.length,
+              itemBuilder: (context, index) {
+                final contact = filteredContacts[index];
+                final bool isActive = contact['id'] == 'chat_1';
+                return _buildContactTile(contact, isActive);
+              },
+            ),
+          ),
         ],
       ),
-      // Se ainda não sabemos qual é o usuário, mostramos um loader
-      body: _currentUserId == null
-          ? const Center(child: CircularProgressIndicator())
-          : buildChatList(),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _startNewChat,
-        child: const Icon(Icons.add),
+      // BOTÃO DE LOGOUT SIMPLES (PODE SER REINTEGRADO A UM MENU DEPOIS)
+      bottomNavigationBar: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: TextButton.icon(
+          onPressed: _handleLogout,
+          icon: const Icon(Icons.logout, color: Colors.grey),
+          label: const Text("Sair", style: TextStyle(color: Colors.grey)),
+        ),
       ),
     );
   }
 
-  // A construção da lista agora usa a variável _currentUserId
-  Widget buildChatList() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _firestore
-          .collection('chats')
-          .where('users', arrayContains: _currentUserId)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(16.0),
-              child: Text("Nenhuma conversa por aqui.\nClique no botão '+' para iniciar uma.", textAlign: TextAlign.center, style: TextStyle(fontSize: 16, color: Colors.grey)),
+  // WIDGET DO CABEÇALHO
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(25, 20, 25, 20),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Text("Inbox", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF343A40))),
+                  const SizedBox(width: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE0F7FF),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text("2 Novas", style: TextStyle(color: Color(0xFF005F73), fontWeight: FontWeight.w600, fontSize: 12)),
+                  ),
+                ],
+              ),
+              InkWell(
+                onTap: () => setState(() => _isSellerOnline = !_isSellerOnline),
+                borderRadius: BorderRadius.circular(20),
+                child: CircleAvatar(
+                  radius: 20,
+                  backgroundColor: const Color(0xFF005F73),
+                  child: Stack(
+                    children: [
+                      const Center(child: Text("V", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18))),
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            color: _isSellerOnline ? Colors.greenAccent[400] : Colors.grey,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          TextField(
+            decoration: InputDecoration(
+              hintText: "Buscar conversas",
+              prefixIcon: const Icon(Icons.search, color: Colors.grey),
+              filled: true,
+              fillColor: const Color(0xFFF8F9FA),
+              contentPadding: EdgeInsets.zero,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // WIDGET DAS ABAS DE FILTRO
+  Widget _buildFilterTabs() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 15),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextButton(
+              onPressed: () => setState(() => _activeFilter = 'all'),
+              style: TextButton.styleFrom(
+                backgroundColor: _activeFilter == 'all' ? const Color(0xFF005F73) : Colors.white,
+                foregroundColor: _activeFilter == 'all' ? Colors.white : const Color(0xFF495057),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  side: const BorderSide(color: Color(0xFFDEE2E6)),
+                ),
+              ),
+              child: const Text("Todas"),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: TextButton(
+              onPressed: () => setState(() => _activeFilter = 'unread'),
+              style: TextButton.styleFrom(
+                backgroundColor: _activeFilter == 'unread' ? const Color(0xFF005F73) : Colors.white,
+                foregroundColor: _activeFilter == 'unread' ? Colors.white : const Color(0xFF495057),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  side: const BorderSide(color: Color(0xFFDEE2E6)),
+                ),
+              ),
+              child: const Text("Não Lidas"),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // WIDGET DE CADA CONTATO NA LISTA
+  Widget _buildContactTile(Map<String, dynamic> contact, bool isActive) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      decoration: BoxDecoration(
+        color: isActive ? const Color(0xFFE0F7FF) : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
+        leading: CircleAvatar(
+          radius: 22.5,
+          backgroundColor: const Color(0xFFCED4DA),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Center(child: Text(contact['initials'], style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF495057)))),
+              if (contact['unread'] > 0)
+                Positioned(
+                  top: -4,
+                  right: -4,
+                  child: Container(
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEE9B00),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                    child: Center(child: Text(contact['unread'].toString(), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold))),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        title: Text(contact['name'], style: const TextStyle(fontWeight: FontWeight.w600)),
+        subtitle: Text(contact['lastMessage'], overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.grey[600], fontSize: 14)),
+        trailing: Text(contact['time'], style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ChatDetailScreen(chatId: contact['id'], otherUserName: contact['name'], otherUserAvatar: ""),
             ),
           );
-        }
-
-        final chats = snapshot.data!.docs;
-        return ListView.separated(
-          itemCount: chats.length,
-          separatorBuilder: (context, index) => const Divider(height: 1, thickness: 1, indent: 75, endIndent: 16, color: Color(0xFFF0F0F0)),
-          itemBuilder: (context, index) {
-            final chat = chats[index];
-            final chatData = chat.data() as Map<String, dynamic>;
-            final List<dynamic> users = chatData['users'];
-            final otherUserId = users.firstWhere((id) => id != _currentUserId);
-
-            return FutureBuilder<DocumentSnapshot>(
-              future: _firestore.collection('users').doc(otherUserId).get(),
-              builder: (context, userSnapshot) {
-                if (!userSnapshot.hasData) return const SizedBox(height: 72);
-                final otherUserData = userSnapshot.data!.data() as Map<String, dynamic>;
-                return ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  leading: CircleAvatar(radius: 28, backgroundColor: Colors.grey[200], child: Text(otherUserData['email'][0].toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20))),
-                  title: Text(otherUserData['email'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text("Última mensagem vai aqui...", style: TextStyle(color: Colors.grey[600])),
-                  trailing: Text("14:30", style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ChatDetailScreen(chatId: chat.id, otherUserName: otherUserData['email'], otherUserAvatar: ""),
-                      ),
-                    );
-                  },
-                );
-              },
-            );
-          },
-        );
-      },
+        },
+      ),
     );
   }
 }
